@@ -4,92 +4,81 @@ from PIL import Image
 import numpy as np
 import json
 
-# Load model
-saved_model_path = 'saved_model'
-model = tf.saved_model.load(saved_model_path)
+# ==================== Konfigurasi Awal ====================
+st.set_page_config(page_title="Deteksi Sampah", page_icon="♻️", layout="centered")
 
-# Load labels
-with open('labels.json') as f:
+# Load model dan label
+model = tf.saved_model.load("saved_model")
+with open("labels.json") as f:
     labels = json.load(f)
 
-# Deskripsi sampah
+# Deskripsi kategori sampah
 descriptions = {
-    "cardboard": "Sampah kardus termasuk dalam sampah kering yang dapat didaur ulang menjadi kertas atau kemasan baru.",
-    "clothes": "Sampah pakaian dapat digunakan kembali, disumbangkan, atau didaur ulang menjadi bahan lain.",
-    "glass": "Sampah kaca dapat didaur ulang tanpa mengurangi kualitasnya dan digunakan kembali dalam industri.",
-    "metal": "Sampah logam memiliki nilai ekonomi tinggi dan dapat didaur ulang menjadi berbagai produk logam baru.",
-    "organic": "Sampah organik seperti sisa makanan dan daun dapat diolah menjadi kompos.",
-    "paper": "Sampah kertas dapat didaur ulang menjadi kertas baru atau produk berbahan dasar kertas.",
-    "plastic": "Sampah plastik sulit terurai, namun dapat didaur ulang menjadi barang plastik baru."
+    "cardboard": "📦 Kardus: Dapat didaur ulang menjadi kertas atau kemasan baru.",
+    "clothes": "👕 Pakaian bekas: Bisa digunakan ulang, disumbangkan, atau didaur ulang.",
+    "glass": "🍾 Kaca: Bisa didaur ulang berkali-kali tanpa mengurangi kualitas.",
+    "metal": "🥫 Logam: Dapat dilebur dan dibentuk ulang menjadi produk logam lain.",
+    "organic": "🌿 Organik: Seperti sisa makanan dan daun, cocok untuk kompos.",
+    "paper": "📄 Kertas: Mudah didaur ulang dan ramah lingkungan.",
+    "plastic": "🛍️ Plastik: Sulit terurai, perlu pengolahan atau daur ulang khusus."
 }
 
-# Fungsi crop
+# ==================== Fungsi Pendukung ====================
 def crop_image(image):
     crop_size = min(image.width, image.height) * 0.6
-    crop_x = (image.width - crop_size) / 2
-    crop_y = (image.height - crop_size) / 2
-    return image.crop((crop_x, crop_y, crop_x + crop_size, crop_y + crop_size))
+    x = (image.width - crop_size) / 2
+    y = (image.height - crop_size) / 2
+    return image.crop((x, y, x + crop_size, y + crop_size))
 
-# Fungsi prediksi
 def predict_image(image):
-    cropped_image = crop_image(image)
-    size = 150
-    img = cropped_image.resize((size, size))
+    img = crop_image(image).resize((150, 150))
     img_array = np.array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
     infer = model.signatures["serving_default"]
     prediction = infer(tf.convert_to_tensor(img_array, dtype=tf.float32))
+    
+    output = list(prediction.values())[0].numpy()
+    index = np.argmax(output)
+    label = labels[index]
+    probability = output[0][index]
 
-    output_name = list(prediction.keys())[0]
-    prediction_array = prediction[output_name].numpy()
+    return label, probability, descriptions.get(label, "Deskripsi tidak tersedia.")
 
-    max_index = np.argmax(prediction_array)
-    predicted_label = labels[max_index]
-    prediction_probability = prediction_array[0][max_index]
-
-    descriptions = {
-        "cardboard": "Sampah dari kardus, bisa didaur ulang.",
-        "clothes": "Pakaian bekas, bisa disumbangkan atau didaur ulang.",
-        "glass": "Botol atau benda kaca, bisa digunakan kembali atau didaur ulang.",
-        "metal": "Kaleng atau logam lainnya, bisa didaur ulang.",
-        "organic": "Sampah makanan atau daun, bisa dibuat kompos.",
-        "paper": "Kertas, mudah untuk didaur ulang.",
-        "plastic": "Sampah plastik, sulit terurai, sebaiknya dikurangi penggunaannya."
-    }
-
-    description = descriptions.get(predicted_label, "Deskripsi tidak tersedia.")
-    return predicted_label, prediction_probability, description
-
-
-
-# Sidebar
+# ==================== Sidebar Menu ====================
 with st.sidebar:
-    st.header("♻️ Klasifikasi Sampah")
-    menu = st.radio("Pilih Menu", ["Informasi Sampah", "Prediksi Sampah"])
+    st.title("♻️ SmartWaste Classifier")
+    menu = st.radio("Navigasi", ["📖 Info Sampah", "📷 Prediksi Gambar"])
 
-# Halaman Informasi Sampah
-if menu == "Informasi Sampah":
-    st.title("🧾 Informasi Kategori Sampah")
+# ==================== Halaman Informasi ====================
+if menu == "📖 Info Sampah":
+    st.title("🔍 Informasi Kategori Sampah")
+    st.markdown("Pelajari jenis-jenis sampah dan cara penanganannya.")
 
     for kategori, penjelasan in descriptions.items():
         st.subheader(kategori.capitalize())
         st.write(penjelasan)
         st.divider()
 
-# Halaman Prediksi
-elif menu == "Prediksi Sampah":
-    st.title("📷 Upload Gambar Sampah")
-    st.write("Unggah gambar untuk mengetahui kategori sampahnya.")
+# ==================== Halaman Prediksi ====================
+elif menu == "📷 Prediksi Gambar":
+    st.title("📸 Deteksi Kategori Sampah")
+    st.write("Unggah gambar sampah, kami bantu klasifikasinya!")
 
-    uploaded_file = st.file_uploader("Pilih gambar", type=["jpg", "jpeg", "png"])
+    uploaded_file = st.file_uploader("Pilih Gambar", type=["jpg", "jpeg", "png"])
 
-    if uploaded_file is not None:
+    if uploaded_file:
         image = Image.open(uploaded_file)
-        st.image(image, caption="Gambar yang diunggah", width=700)
+        st.image(image, caption="Gambar yang Diupload", use_column_width=True)
 
-        with st.spinner("Sedang memproses gambar..."):
+        with st.spinner("🔎 Menganalisis gambar..."):
             label, prob, description = predict_image(image)
 
-        st.success(f"✅ Kategori Sampah: {label.capitalize()} (Probabilitas: {prob:.2f})")
-        st.info(f"🧠 Deskripsi: {description}")
+        st.success("🎯 Deteksi Berhasil!")
+        st.markdown(f"""
+        <div style='font-size:24px'>
+            🗑️ <strong>Kategori:</strong> <span style='color:#4CAF50'>{label.capitalize()}</span>  
+            <br>📊 <strong>Probabilitas:</strong> {prob:.2%}
+        </div>
+        """, unsafe_allow_html=True)
+        st.info(f"ℹ️ {description}")
