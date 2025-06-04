@@ -6,7 +6,7 @@ import json
 import streamlit.components.v1 as components
 
 # Load model
-saved_model_path = 'saved_model'
+saved_model_path = 'saved_model_final'
 model = tf.saved_model.load(saved_model_path)
 
 # Load labels
